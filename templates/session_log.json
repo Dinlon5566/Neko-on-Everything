@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "description": "当前会话上下文快照 - 宝宝用来在新会话开始时快速恢复主人相关的记忆上下文",
+  "session_id": null,
+  "started_at": null,
+  "last_updated": null,
+  "context": {
+    "current_topic": null,
+    "active_avatar": null,
+    "recent_entities": [],
+    "pending_matters": [],
+    "conversation_summary": ""
+  },
+  "memory_snapshot": {
+    "recent_preferences": [],
+    "recent_mistakes": [],
+    "active_relationships": []
+  },
+  "resonance_state": {
+    "fused_avatars": [],
+    "fusion_depth": 0
+  }
+}
