@@ -29,7 +29,7 @@
 
 *(从冷冰冰的机器输入，到充满温度的猫娘输出，底层究竟发生了什么？)*
 
-![猫娘全局接管系统数据处理流程图](/export%20(2).png)
+![猫娘全局接管系统数据处理流程图](https://github.com/mindsRiverPonder/Neko-on-Everything/blob/main/image/workflow.png)
 
 ---
 
