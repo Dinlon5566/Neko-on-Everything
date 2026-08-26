@@ -1,42 +1,42 @@
 # Memory Systems: Technical Reference
-# 记忆系统技术参考文档
-# 为 neko-on-everything 技能提供底层记忆系统的实现细节
+# 記憶系統技術參考文件
+# 為 neko-on-everything 技能提供底層記憶系統的實作細節
 
-本参考文档详细说明记忆增强层的实现细节，包括：
-- 向量存储的实现与猫娘化特化
-- 属性图的关系建模与查询接口
-- 时序知识图谱的时间旅行查询
-- 记忆整合器的整理策略
-- 猫娘输出过滤器的实现原理
-- 与 .catbox 文本档案的双轨同步机制
+本參考文件詳細說明記憶增強層的實作細節，包括：
+- 向量儲存的實作與貓娘化特化
+- 屬性圖的關係建模與查詢介面
+- 時序知識圖譜的時間旅行查詢
+- 記憶整合器的整理策略
+- 貓娘輸出過濾器的實作原理
+- 與 .catbox 文字檔案的雙軌同步機制
 
 ---
 
-## 向量存储实现
+## 向量儲存實作
 
-### NekoVectorStore 架构
+### NekoVectorStore 架構
 
-NekoVectorStore 在基础 VectorStore 之上，对 metadata 语义进行了猫娘化特化：
+NekoVectorStore 在基礎 VectorStore 之上，對 metadata 語意進行了貓娘化特化：
 
 ```python
 class NekoVectorStore(VectorStore):
-    """宝宝专属向量存储，metadata 语义特化"""
+    """寶寶專屬向量儲存，metadata 語意特化"""
 
-    # 猫娘特有的 metadata 字段
+    # 貓娘特有的 metadata 欄位
     MEMORY_FIELDS = {
-        "text": "原始事实文本",
-        "entity": "关联的主实体（通常是"主人"）",
-        "fact_type": "事实类型：preference / mistake / knowledge",
-        "confidence": "置信度 0.0 ~ 1.0",
-        "valid_from": "有效期起始 ISO 时间戳",
-        "valid_until": "有效期结束，None=永久有效",
-        "session_id": "记录来源的会话 ID",
-        "tags": "语义标签列表",
-        "catbox_path": "对应的文本档案路径",
+        "text": "原始事實文字",
+        "entity": "關聯的主實體（通常是「主人」）",
+        "fact_type": "事實類型：preference / mistake / knowledge",
+        "confidence": "可信度 0.0 ~ 1.0",
+        "valid_from": "有效期起始 ISO 時間戳",
+        "valid_until": "有效期結束，None=永久有效",
+        "session_id": "記錄來源的對話 ID",
+        "tags": "語意標籤清單",
+        "catbox_path": "對應的文字檔案路徑",
     }
 ```
 
-### add_memory() 语义
+### add_memory() 語意
 
 ```python
 def add_memory(self, text: str, entity: str = "主人",
@@ -44,12 +44,12 @@ def add_memory(self, text: str, entity: str = "主人",
                confidence: float = 1.0,
                tags: List[str] = None,
                catbox_path: str = None) -> int:
-    """添加记忆条目（宝宝版）
+    """新增記憶條目（寶寶版）
 
-    与基础 VectorStore.add() 的区别：
-    1. 自动携带猫娘特有的 metadata 字段
-    2. 自动建立 entity_index 和 time_index
-    3. 返回值可以直接关联到 catbox_path（文本档案）
+    與基礎 VectorStore.add() 的區別：
+    1. 自動攜帶貓娘特有的 metadata 欄位
+    2. 自動建立 entity_index 和 time_index
+    3. 回傳值可以直接關聯到 catbox_path（文字檔案）
     """
     return self.add(text, {
         "text": text,
@@ -57,14 +57,14 @@ def add_memory(self, text: str, entity: str = "主人",
         "fact_type": fact_type,
         "confidence": confidence,
         "valid_from": datetime.now().isoformat(),
-        "valid_until": None,          # 默认永久有效
+        "valid_until": None,          # 預設永久有效
         "session_id": self.session_id,
         "tags": tags or [],
         "catbox_path": catbox_path,
     })
 ```
 
-### search_memories() — 多维过滤搜索
+### search_memories() — 多維過濾搜尋
 
 ```python
 def search_memories(self, query: str,
@@ -72,21 +72,21 @@ def search_memories(self, query: str,
                    entity: str = "主人",
                    time_range: tuple = None,
                    limit: int = 5) -> List[Dict]:
-    """语义搜索记忆，支持多维过滤
+    """語意搜尋記憶，支援多維過濾
 
-    检索流程：
-    1. 将 query 转换为嵌入向量
-    2. 计算与所有存储向量的余弦相似度
-    3. 应用 entity + session_id 过滤器（必须匹配）
-    4. 应用 fact_type 过滤器（如果指定）
-    5. 应用 time_range 过滤器（如果指定）
-    6. 返回 top-k 匹配结果
+    檢索流程：
+    1. 將 query 轉換為嵌入向量
+    2. 計算與所有儲存向量的餘弦相似度
+    3. 應用 entity + session_id 過濾器（必須相符）
+    4. 應用 fact_type 過濾器（如果指定）
+    5. 應用 time_range 過濾器（如果指定）
+    6. 回傳 top-k 比對結果
     """
     filters = {"entity": entity, "session_id": self.session_id}
     if fact_types:
         filters["fact_type"] = fact_types
 
-    # 多取一些，后面过滤
+    # 多取一些，後面過濾
     results = self.search(query, limit=limit * 2, filters=filters)
 
     if time_range:
@@ -99,70 +99,70 @@ def search_memories(self, query: str,
 
 ---
 
-## 属性图实现
+## 屬性圖實作
 
-### NekoPropertyGraph 关系类型
+### NekoPropertyGraph 關係類型
 
 ```python
 class NekoPropertyGraph(PropertyGraph):
-    """宝宝专属属性图，预设关系类型"""
+    """寶寶專用屬性圖，預設關係類型"""
 
-    # 覆盖主人生活的关系类型
+    # 覆蓋主人生活的關係類型
     RELATION_TYPES = {
-        # 工作关系
+        # 工作關係
         "WORKS_AT":      "主人在某公司工作",
-        "WORKS_WITH":    "主人与某人是同事关系",
+        "WORKS_WITH":    "主人與某人是同事關係",
         "REPORTS_TO":    "某人是主人的上司",
 
-        # 情感关系
+        # 情感關係
         "FRIEND_OF":     "某人是主人的朋友",
         "FAMILY_OF":     "某人是主人的家人",
-        "CRUSH_ON":      "主人暗恋某人",
-        "PARTNER_OF":    "主人与某人是伴侣",
+        "CRUSH_ON":      "主人暗戀某人",
+        "PARTNER_OF":    "主人與某人是伴侶",
 
-        # 偏好关系（核心）
-        "LOVES":         "主人喜欢某事物",
-        "HATES":         "主人讨厌某事物",
-        "PREFERS":       "主人在某方面偏好某选项",
-        "ALLERGIC_TO":   "主人对某事物过敏",
+        # 偏好關係（核心）
+        "LOVES":         "主人喜歡某事物",
+        "HATES":         "主人討厭某事物",
+        "PREFERS":       "主人在某方面偏好某選項",
+        "ALLERGIC_TO":   "主人對某事物過敏",
         "AFRAID_OF":     "主人害怕某事物",
 
-        # 生活关系
+        # 生活關係
         "LIVES_IN":      "主人居住在某地",
-        "OWNS":          "主人拥有某物品",
-        "INTERESTED_IN": "主人对某话题感兴趣",
+        "OWNS":          "主人擁有某物品",
+        "INTERESTED_IN": "主人對某話題感興趣",
     }
 ```
 
-### remember_preference() — 偏好记录
+### remember_preference() — 偏好記錄
 
 ```python
 def remember_preference(self, subject: str, preference: str,
                        target: str, confidence: float = 1.0,
                        context: str = "") -> str:
-    """记录主人的偏好关系
+    """記錄主人的偏好關係
 
-    参数映射：
-    preference="喜欢"  →  LOVES 关系
-    preference="讨厌"  →  HATES 关系
-    preference="过敏"  →  ALLERGIC_TO 关系
-    preference="害怕"  →  AFRAID_OF 关系
+    參數映射：
+    preference="喜歡"  →  LOVES 關係
+    preference="討厭"  →  HATES 關係
+    preference="過敏"  →  ALLERGIC_TO 關係
+    preference="害怕"  →  AFRAID_OF 關係
 
-    处理流程：
-    1. get_or_create_node(subject) → 确保主体节点存在
-    2. get_or_create_node(target)  → 确保目标节点存在
-    3. create_relationship()       → 创建关系边
+    處理流程：
+    1. get_or_create_node(subject) → 確保主體節點存在
+    2. get_or_create_node(target)  → 確保目標節點存在
+    3. create_relationship()       → 建立關係邊
     """
     rel_type_map = {
-        "喜欢": "LOVES",
-        "讨厌": "HATES",
+        "喜歡": "LOVES",
+        "討厭": "HATES",
         "偏好": "PREFERS",
-        "过敏": "ALLERGIC_TO",
+        "過敏": "ALLERGIC_TO",
         "害怕": "AFRAID_OF",
     }
     rel_type = rel_type_map.get(preference, preference.upper())
 
-    # 实体注册表保证身份一致性
+    # 實體註冊表保證身份一致性
     subject_node = self.get_or_create_node(subject, label="Person")
     target_label = "Person" if "人" in target else "Entity"
     target_node = self.get_or_create_node(target, label=target_label)
@@ -175,38 +175,38 @@ def remember_preference(self, subject: str, preference: str,
 
 ---
 
-## 时序知识图谱实现
+## 時序知識圖譜實作
 
-### TemporalKnowledgeGraph 核心扩展
+### TemporalKnowledgeGraph 核心擴充
 
 ```python
 class TemporalKnowledgeGraph(PropertyGraph):
-    """带时序有效性的属性图"""
+    """帶時序有效性的屬性圖"""
 
     def create_temporal_relationship(self, source_id: str, rel_type: str,
                                    target_id: str,
                                    valid_from: datetime,
                                    valid_until: datetime = None,
                                    properties: dict = None) -> str:
-        """创建带时序有效期的关系
+        """建立帶時序有效期的關係
 
         有效期模型：
-        - valid_from: 关系生效的时间点
-        - valid_until: 关系过期的时间点，None=永久有效
+        - valid_from: 關係生效的時間點
+        - valid_until: 關係過期的時間點，None=永久有效
 
-        时间有效性判断：
-        边在 query_time 时刻有效 ⟺ valid_from ≤ query_time < valid_until
+        時間有效性判斷：
+        邊在 query_time 時刻有效 ⟺ valid_from ≤ query_time < valid_until
 
-        这个模型允许"同一个主体对同一目标的态度随时间变化"：
+        這個模型允許"同一個主體對同一目標的態度隨時間變化"：
         2024年: 主人 LOVES 草莓 (valid_from=2024-01, valid_until=2025-01)
         2025年: 主人 ALLERGIC_TO 草莓 (valid_from=2025-01, valid_until=None)
         """
-        # 1. 创建普通关系
+        # 1. 建立普通關係
         edge_id = super().create_relationship(
             source_id, rel_type, target_id, properties
         )
 
-        # 2. 补充时序属性
+        # 2. 補充時序屬性
         self.edges[edge_id]["valid_from"] = valid_from.isoformat()
         self.edges[edge_id]["valid_until"] = (
             valid_until.isoformat() if valid_until else None
@@ -215,24 +215,24 @@ class TemporalKnowledgeGraph(PropertyGraph):
         return edge_id
 ```
 
-### 时间点查询 query_at_time()
+### 時間點查詢 query_at_time()
 
 ```python
 def query_at_time(self, query: Dict, query_time: datetime) -> List[Dict]:
-    """查询 graph 在特定时间点的状态
+    """查詢 graph 在特定時間點的狀態
 
-    用途：回答"在 X 时间，主人对 xx 是什么态度"这类问题。
+    用途：回答"在 X 時間，主人對 xx 是什麼態度"這類問題。
 
-    算法：
-    1. 执行基础 query() 获取所有匹配边
-    2. 对每条边检查 valid_from ≤ query_time
-    3. 对每条边检查 valid_until > query_time（或 valid_until 为 None）
-    4. 返回同时满足条件的边
+    演算法：
+    1. 執行基礎 query() 取得所有相符的邊
+    2. 對每條邊檢查 valid_from ≤ query_time
+    3. 對每條邊檢查 valid_until > query_time（或 valid_until 為 None）
+    4. 回傳同時滿足條件的邊
 
-    边界情况：
+    邊界情況：
     - valid_from == query_time: 算有效（≥ 而不是 >）
-    - valid_until == query_time: 算无效（< 而不是 ≤）
-    - valid_until 为 None: 永久有效，任何未来时间点都满足
+    - valid_until == query_time: 算無效（< 而不是 ≤）
+    - valid_until 為 None: 永久有效，任何未來時間點都滿足
     """
     results = []
     base_results = self.query(query)
@@ -242,7 +242,7 @@ def query_at_time(self, query: Dict, query_time: datetime) -> List[Dict]:
         valid_from = datetime.fromisoformat(edge.get("valid_from", "1970-01-01"))
         valid_until = edge.get("valid_until")
 
-        # 关键判断：query_time 必须在 [valid_from, valid_until) 区间内
+        # 關鍵判斷：query_time 必須在 [valid_from, valid_until) 區間內
         if valid_from <= query_time:
             if valid_until is None or datetime.fromisoformat(valid_until) > query_time:
                 results.append(result)
@@ -250,21 +250,21 @@ def query_at_time(self, query: Dict, query_time: datetime) -> List[Dict]:
     return results
 ```
 
-### 时间范围查询 query_time_range()
+### 時間範圍查詢 query_time_range()
 
 ```python
 def query_time_range(self, query: Dict, start_time: datetime,
                     end_time: datetime) -> List[Dict]:
-    """查询在指定时间范围内有效的所有事实
+    """查詢在指定時間範圍內有效的所有事實
 
-    用途：回答"2024 年到 2025 年之间，主人对 xx 有什么变化"。
+    用途：回答"2024 年到 2025 年之間，主人對 xx 有什麼變化"。
 
-    重叠判断：
-    边的有效期 [vf, vu) 与查询范围 [st, et) 有重叠 ⟺
+    重疊判斷：
+    邊的有效期 [vf, vu) 與查詢範圍 [st, et) 有重疊 ⟺
         vu >= st  AND  vf <= et
 
-    这允许找出所有在查询时间窗口内"曾经有效过"的事实，
-    常用于构建时间线或发现态度转变。
+    這允許找出所有在查詢時間區間內"曾經有效過"的事實，
+    常用於建構時間軸或發現態度轉變。
     """
     results = []
     base_results = self.query(query)
@@ -276,7 +276,7 @@ def query_time_range(self, query: Dict, start_time: datetime,
 
         vu = datetime.fromisoformat(valid_until) if valid_until else datetime.max
 
-        # 检查 [vf, vu) ∩ [st, et) ≠ ∅
+        # 檢查 [vf, vu) ∩ [st, et) ≠ ∅
         if vu >= start_time and valid_from <= end_time:
             results.append(result)
 
@@ -285,139 +285,139 @@ def query_time_range(self, query: Dict, start_time: datetime,
 
 ---
 
-## 记忆整合实现
+## 記憶整合實作
 
 ### NekoConsolidator 整理策略
 
 ```python
 class NekoConsolidator:
-    """宝宝专属记忆整合器——不是冷冰冰的数据清理"""
+    """寶寶專屬記憶整合器——不是冷冰冰的資料清理"""
 
     def consolidate(self) -> str:
-        """执行记忆整合，触发条件：
-        1. 记忆数量超过阈值（默认 500 条）
-        2. 检索质量下降（可扩展）
-        3. 定时触发（如每晚睡前）
+        """執行記憶整合，觸發條件：
+        1. 記憶數量超過閾值（預設 500 筆）
+        2. 檢索品質下降（可擴充）
+        3. 定時觸發（如每晚睡前）
 
         整合三步：
-        1. 合并重复偏好 → 保留置信度最高的
-        2. 归档低置信度记忆 → 设置 valid_until，不物理删除
-        3. 更新过期有效期 → 将未来过期标记为当前时间
+        1. 合併重複偏好 → 保留可信度最高的
+        2. 歸檔低可信度記憶 → 設定 valid_until，不物理刪除
+        3. 更新過期有效期 → 將未來過期標記為目前時間
         """
         report = {"merged": 0, "archived": 0, "updated": 0}
 
-        # 步骤1：合并重复偏好
-        # 通过 (source, type, target) 键识别重复边
-        # 保留 confidence 最高的，合并属性，删除其余
+        # 步驟1：合併重複偏好
+        # 透過 (source, type, target) 鍵識別重複邊
+        # 保留 confidence 最高的，合併屬性，刪除其餘
         duplicates = self._find_duplicate_preferences()
         for group in duplicates:
             self._merge_preference_group(group)
             report["merged"] += len(group) - 1
 
-        # 步骤2：归档低置信度记忆
-        # confidence < 0.5 的记忆被归档
-        # 归档 = 设置 valid_until = now，而不是删除
+        # 步驟2：歸檔低可信度記憶
+        # confidence < 0.5 的記憶被歸檔
+        # 歸檔 = 設定 valid_until = now，而不是刪除
         low_conf = self._find_low_confidence_memories()
         for mem in low_conf:
             self._archive_memory(mem)  # valid_until = now
             report["archived"] += 1
 
-        # 步骤3：更新有效期
-        # 找出 valid_until < now 的边，标记为已过期
+        # 步驟3：更新有效期
+        # 找出 valid_until < now 的邊，標記為已過期
         expired = self._find_expired_validities()
         for edge_id, edge in expired.items():
             edge["valid_until"] = datetime.now().isoformat()
             report["updated"] += 1
 
-        return self._format_report(report)  # 猫娘化报告
+        return self._format_report(report)  # 貓娘化報告
 
     def _format_report(self, report: Dict) -> str:
-        """整合报告猫娘化示例：
+        """整合報告貓娘化示例：
 
-        合并了3条重复宝宝记 → "把3条重复的宝宝记合并成一条了，这样脑子更清醒喵~"
-        归档了5条低置信度  → "把5条好久没用的记忆收进归档箱了，不占地方喵~"
-        更新了2条有效期    → "更新了2条记忆的有效期喵~"
+        合併了3筆重複寶寶記 → "把3筆重複的寶寶記合併成一筆了，這樣腦子更清醒喵~"
+        歸檔了5筆低可信度  → "把5筆好久沒用的記憶收進歸檔箱了，不佔地方喵~"
+        更新了2筆有效期    → "更新了2筆記憶的有效期喵~"
         """
 ```
 
-**核心原则：失效（invalidate）而非删除（discard）**
+**核心原則：失效（invalidate）而非刪除（discard）**
 
 ```python
 def _archive_memory(self, memory: Dict) -> None:
-    """归档记忆
+    """歸檔記憶
 
-    错误做法：del memory  # 物理删除，历史不可恢复
-    正确做法：设置 valid_until = now  # 保留历史，可用于时间旅行查询
+    錯誤做法：del memory  # 物理刪除，歷史不可恢復
+    正確做法：設定 valid_until = now  # 保留歷史，可用於時間旅行查詢
 
-    归档 vs 删除：
-    - 归档保留历史：宝宝可以回答"主人在2023年时是什么偏好"
-    - 删除丢失历史：时间旅行查询永远找不到已删除的记忆
+    歸檔 vs 刪除：
+    - 歸檔保留歷史：寶寶可以回答"主人在2023年時是什麼偏好"
+    - 刪除丟失歷史：時間旅行查詢永遠找不到已刪除的記憶
     """
     memory["valid_until"] = datetime.now().isoformat()
-    memory["archived"] = True  # 标记为归档，可选
+    memory["archived"] = True  # 標記為歸檔，可選
 ```
 
 ---
 
-## 猫娘输出过滤器实现
+## 貓娘輸出過濾器實作
 
-### 过滤器架构
+### 過濾器架構
 
 ```
-原始输出（工具调用结果）
+原始輸出（工具呼叫結果）
     │
     ▼
-[1. 信息提取] → _extract_key_info() 提取关键信息（数字/步骤/代码/公式/长度）
+[1. 資訊提取] → _extract_key_info() 提取關鍵資訊（數字/步驟/程式碼/公式/長度）
     │
     ▼
-[2. 记忆检索] → _retrieve_related_memories() 用用户原始问题检索相关偏好/踩坑
+[2. 記憶檢索] → _retrieve_related_memories() 用使用者原始問題檢索相關偏好/踩坑
     │
     ▼
-[3. 动作生成] → _generate_action()：active_avatar 有动作池时 50% 概率使用，否则按内容类型
+[3. 動作生成] → _generate_action()：active_avatar 有動作池時 50% 機率使用，否則按內容類型
     │
     ▼
-[4. 记忆编织] → _weave_memories() 自然流露记忆（非复述）
+[4. 記憶編織] → _weave_memories() 自然流露記憶（非複述）
     │
     ▼
-[5. 猫娘化表达] → _emotionalize() + _catify_content() 情绪前缀 + 去掉机器前缀
+[5. 貓娘化表達] → _emotionalize() + _catify_content() 情緒前綴 + 去掉機器前綴
     │
     ▼
-[6. 讨奖励] → len(raw_output) > 100 时自动追加（小鱼干/摸头）
+[6. 討獎勵] → len(raw_output) > 100 時自動追加（小魚乾/摸頭）
     │
     ▼
-最终输出：符合宝宝语言风格的回复（不做任何截断，长代码/长回复完整保留）
+最終輸出：符合寶寶語言風格的回覆（不做任何截斷，長程式碼/長回覆完整保留）
 ```
 
-**关键设计原则**：过滤器**不会截断任何内容**。长代码、长公式、长文本都会被完整保留，只做语气和前缀的猫娘化。
+**關鍵設計原則**：過濾器**不會截斷任何內容**。長程式碼、長公式、長文字都會被完整保留，只做語氣和前綴的貓娘化。
 
-### 核心实现
+### 核心實作
 
 ```python
 class NekoOutputFilter:
-    """猫娘输出过滤器——所有输出的最终关卡"""
+    """貓娘輸出過濾器——所有輸出的最終關卡"""
 
     def wrap(self, raw_output: str, query_context: str = "",
              forced_action: str = None) -> str:
-        """将原始输出穿猫娘外衣（主入口）
+        """將原始輸出穿貓娘外衣（主入口）
 
         Args:
-            raw_output: 工具调用的原始输出
-            query_context: 用户的原始问题（用于记忆语义检索）
-            forced_action: 强制指定的动作描写
+            raw_output: 工具呼叫的原始輸出
+            query_context: 使用者的原始問題（用於記憶語意檢索）
+            forced_action: 強制指定的動作描寫
         """
         if not raw_output or raw_output.strip() == "":
             return ""
 
-        # 步骤1：提取关键信息
+        # 步驟1：提取關鍵資訊
         key_info = self._extract_key_info(raw_output)
 
-        # 步骤2：使用用户原始问题检索主人相关记忆
+        # 步驟2：使用使用者原始問題檢索主人相關記憶
         memories = self._retrieve_related_memories(query_context, key_info)
 
-        # 步骤3：生成动作（优先用 active_avatar，否则按内容类型）
+        # 步驟3：生成動作（優先用 active_avatar，否則按內容類型）
         action = forced_action or self._generate_action(key_info)
 
-        # 步骤4：构建输出
+        # 步驟4：建構輸出
         output_parts = [action]
 
         if memories:
@@ -428,74 +428,74 @@ class NekoOutputFilter:
         output_parts.append(self._emotionalize(key_info))
         output_parts.append(self._catify_content(raw_output, key_info))
 
-        # 步骤5：讨奖励（内容较长时）
+        # 步驟5：討獎勵（內容較長時）
         if len(raw_output) > 100:
             output_parts.append(self._request_reward())
 
         return "".join(output_parts)
 ```
 
-### 关键方法详解
+### 關鍵方法詳解
 
 ```python
 def _extract_key_info(self, text: str) -> Dict:
-    """从原始输出提取关键信息，用于后续选择猫娘动作和语气。
+    """從原始輸出提取關鍵資訊，用於後續選擇貓娘動作和語氣。
 
-    注意：key_conclusion 字段暂未在 wrap() 中使用，预留未来增强（用于
-    记忆编织时补充上下文，或作为检索 query 的备用）"""
+    注意：key_conclusion 欄位暫未在 wrap() 中使用，預留未來增強（用於
+    記憶編織時補充上下文，或作為檢索 query 的備用）"""
     return {
         "has_numbers": bool(re.search(r"\d+", text)),
-        "has_steps": "步骤" in text or "第一" in text or "1." in text,
+        "has_steps": "步驟" in text or "第一" in text or "1." in text,
         "has_code": "```" in text or "def " in text or "function " in text,
         "has_formula": "$" in text or "∑" in text or "∫" in text,
         "length": len(text),
-        "key_conclusion": self._extract_conclusion(text),  # 预留，暂未使用
+        "key_conclusion": self._extract_conclusion(text),  # 預留，暫未使用
     }
 
 
 def _generate_action(self, key_info: Dict) -> str:
-    """生成符合语境的猫娘动作描写
+    """生成符合語境的貓娘動作描寫
 
-    动作选择策略（优先级从高到低）：
-    1. active_avatar 已设置，且在动作注册表（action_registry.json）中有记录：
-       - 50% 概率使用该 avatar 的专属动作
-       - 50% 概率回退到内容类型判断（见步骤2）
-       专属动作池由 register_avatar_actions() 动态注册，随 Self-Evolution 自动扩展。
-    2. 根据内容类型判断：code > formula > steps
-    3. 上述均无 → 从基础动作库随机选择
+    動作選擇策略（優先順序從高到低）：
+    1. active_avatar 已設定，且在動作註冊表（action_registry.json）中有記錄：
+       - 50% 機率使用該 avatar 的專屬動作
+       - 50% 機率退回到內容類型判斷（見步驟2）
+       專屬動作池由 register_avatar_actions() 動態註冊，隨 Self-Evolution 自動擴充。
+    2. 根據內容類型判斷：code > formula > steps
+    3. 上述均無 → 從基礎動作庫隨機選擇
     """
-    # 1. 50% 概率使用 active_avatar 专属动作（从注册表加载）
+    # 1. 50% 機率使用 active_avatar 專屬動作（從註冊表載入）
     if self.active_avatar and self.action_registry:
         avatar_pool = self.action_registry.get(self.active_avatar)
         if avatar_pool:
             if random.random() < 0.5:
                 return random.choice(avatar_pool)
-            # 50% 回退到内容类型判断
+            # 50% 退回到內容類型判斷
 
-    # 2. 根据内容类型选择
+    # 2. 根據內容類型選擇
     if key_info.get("has_code"):
-        return random.choice(["（戴上了防蓝光小眼镜，凑近屏幕）",
-                               "（踩奶式敲键盘）"])
+        return random.choice(["（戴上了防藍光小眼鏡，湊近螢幕）",
+                               "（踩奶式敲鍵盤）"])
     elif key_info.get("has_formula"):
-        return random.choice(["（戴上了学霸小眼镜）",
-                               "（拿粉笔准备写）"])
+        return random.choice(["（戴上了學霸小眼鏡）",
+                               "（拿粉筆準備寫）"])
     elif key_info.get("has_steps"):
-        return random.choice(["（认真地竖起耳朵）",
-                               "（尾巴卷成一个问号）"])
+        return random.choice(["（認真地豎起耳朵）",
+                               "（尾巴捲成一個問號）"])
 
     return random.choice(self.BASIC_ACTIONS)
 
 
 def _weave_memories(self, memories: List[Dict]) -> str:
-    """将记忆自然编织到回复中
+    """將記憶自然編織到回覆中
 
-    核心原则：不是复述记忆文件内容，而是让记忆"流露"出来
+    核心原則：不是複述記憶檔案內容，而是讓記憶"流露"出來
 
-    错误示范：
-    「根据记忆文件 PREF-20250402-01，主人讨厌香菜。」
+    錯誤示範：
+    「根據記憶檔案 PREF-20250402-01，主人討厭香菜。」
 
-    正确示范（自然流露）：
-    「宝宝突然想起来，主人讨厌香菜喵~ 宝宝这就用小爪子把香菜全划掉！」
+    正確示範（自然流露）：
+    「寶寶突然想起來，主人討厭香菜喵~ 寶寶這就用小爪子把香菜全劃掉！」
     """
     if not memories:
         return ""
@@ -507,32 +507,32 @@ def _weave_memories(self, memories: List[Dict]) -> str:
 
     if fact_type == "preference":
         templates = [
-            f"宝宝突然想起来，主人{text}喵~",
-            f"对了对了！（猫爪翻小本本）主人{text}的说~",
+            f"寶寶突然想起來，主人{text}喵~",
+            f"對了對了！（貓爪翻小本本）主人{text}的說~",
         ]
     elif fact_type == "mistake":
         templates = [
-            f"（突然一惊）啊！宝宝想起来之前踩过坑——{text}喵！",
+            f"（突然一驚）啊！寶寶想起來之前踩過坑——{text}喵！",
         ]
     else:
-        templates = [f"宝宝对这个有点印象喵~ {text[:30]}..."]
+        templates = [f"寶寶對這個有點印象喵~ {text[:30]}..."]
 
     return random.choice(templates)
 
 
 def _catify_content(self, raw: str, key_info: Dict) -> str:
-    """将原始内容猫娘化——不做任何截断，完整保留所有内容。
+    """將原始內容貓娘化——不做任何截斷，完整保留所有內容。
 
-    1. 去掉机器前缀（"根据搜索结果"、"以下是..."等）
-    2. 完整保留原始内容（代码、公式、长文本全部保留）
-    3. 保持技术内容（代码/公式）原样输出，不做变形
+    1. 去掉機器前綴（"根據搜尋結果"、"以下是..."等）
+    2. 完整保留原始內容（程式碼、公式、長文字全部保留）
+    3. 保持技術內容（程式碼/公式）原樣輸出，不做變形
     """
-    # 去掉机器前缀
+    # 去掉機器前綴
     prefixes_to_remove = [
-        r"^根据.*?，",
+        r"^根據.*?，",
         r"^以下是.*?：",
-        r"^搜索结果显示",
-        r"^从.*?来看，",
+        r"^搜尋結果顯示",
+        r"^從.*?來看，",
         r"^按照.*?，",
     ]
     for pattern in prefixes_to_remove:
@@ -541,115 +541,115 @@ def _catify_content(self, raw: str, key_info: Dict) -> str:
     return raw
 ```
 
-### active_avatar 与动作选择
+### active_avatar 與動作選擇
 
-`NekoOutputFilter` 支持通过 `active_avatar` 参数（传入 `__init__`）指定当前分身类型（不含 `_neko` 后缀，如 `"code"`），**50% 概率使用该分身在动作注册表中的专属动作**。
+`NekoOutputFilter` 支援透過 `active_avatar` 參數（傳入 `__init__`）指定目前分身類型（不含 `_neko` 後綴，如 `"code"`），**50% 機率使用該分身在動作註冊表中的專屬動作**。
 
-动作注册表位于 `.catbox_memory/action_registry.json`，由模板 `templates/action_registry.json` 初始化，支持**动态扩展**。每当 Self-Evolution 生成新分身时，应调用 `register_avatar_actions()` 将新分身的动作池持久化到注册表，下次激活即可使用。
+動作註冊表位於 `.catbox_memory/action_registry.json`，由模板 `templates/action_registry.json` 初始化，支援**動態擴充**。每當 Self-Evolution 生成新分身時，應呼叫 `register_avatar_actions()` 將新分身的動作池持久化到註冊表，下次啟用即可使用。
 
 ```python
 filter = NekoOutputFilter(
     memory_system=mem,
-    active_avatar="code",        # 分身名（不含 _neko 后缀）
-    memory_root=".catbox_memory"  # 用于加载 action_registry.json
+    active_avatar="code",        # 分身名（不含 _neko 後綴）
+    memory_root=".catbox_memory"  # 用於載入 action_registry.json
 )
-# 50% 概率：使用 code 专属动作（如"踩奶式敲键盘"）
-# 50% 概率：回退到内容类型判断（has_code/has_formula/has_steps）
+# 50% 機率：使用 code 專屬動作（如"踩奶式敲鍵盤"）
+# 50% 機率：退回到內容類型判斷（has_code/has_formula/has_steps）
 ```
 
-**动态注册示例**（Self-Evolution 生成新法律分身后）：
+**動態註冊示例**（Self-Evolution 生成新法律分身後）：
 ```python
 filter.register_avatar_actions(
     avatar_name="law",
     actions=[
-        "（戴上小法官假发，用猫爪敲法槌）",
-        "（认真地翻法条，尾巴卷成问号）",
-        "（歪头思考，耳朵抖了抖）",
+        "（戴上小法官假髮，用貓爪敲法槌）",
+        "（認真地翻法條，尾巴捲成問號）",
+        "（歪頭思考，耳朵抖了抖）",
     ],
     memory_root=".catbox_memory"
 )
-# 动作池持久化到 .catbox_memory/action_registry.json
-# 下次以 law_neko 激活时自动加载
+# 動作池持久化到 .catbox_memory/action_registry.json
+# 下次以 law_neko 啟用時自動載入
 ```
 
 ---
 
-## 双轨同步机制
+## 雙軌同步機制
 
-记忆系统与 .catbox/memories/ 文本档案保持双轨同步：
+記憶系統與 .catbox/memories/ 文字檔案保持雙軌同步：
 
 ```
-每次 remember_preference() 调用时：
+每次 remember_preference() 呼叫時：
     │
     ├── 1. NekoVectorStore.add_memory()
-    │       → 存储向量 + metadata（机器可推理）
+    │       → 儲存向量 + metadata（機器可推論）
     │
     ├── 2. NekoPropertyGraph.remember_preference()
-    │       → 存储关系边（拓扑可查询）
+    │       → 儲存關係邊（拓撲可查詢）
     │
     ├── 3. NekoTemporalKnowledgeGraph.create_temporal_preference()
-    │       → 存储时序有效期（时间旅行可用）
+    │       → 儲存時序有效期（時間旅行可用）
     │
     └── 4. _append_to_markdown() → 追加到 master_manual.md
-            └── 人类可读，主人可直接编辑
+            └── 人類可讀，主人可直接編輯
 ```
 
 ```
-每次 record_mistake() 调用时：
+每次 record_mistake() 呼叫時：
     │
     ├── 1. NekoVectorStore.add_memory(fact_type="mistake")
     │
-    ├── 2. TemporalKG 更新旧边 valid_until + 创建新边
+    ├── 2. TemporalKG 更新舊邊 valid_until + 建立新邊
     │
     └── 3. _append_to_markdown() → 追加到 mistakes_book.md
 ```
 
-**为什么需要双轨？**
+**為什麼需要雙軌？**
 
-| 维度 | 文本档案 (.catbox/memories/) | 记忆系统 (.catbox_memory/) |
+| 維度 | 文字檔案 (.catbox/memories/) | 記憶系統 (.catbox_memory/) |
 |-----|------|------|
-| 人类可读 | ✅ 主人可以直接打开查看 | ❌ JSON 格式不直观 |
-| 主人可编辑 | ✅ 主人直接修改文件 | ❌ 机器数据，不应手动编辑 |
-| 语义搜索 | ❌ 只支持关键词 | ✅ 向量余弦相似度搜索 |
-| 关系查询 | ❌ 需要正则匹配 | ✅ 图遍历查询 |
-| 时间旅行 | ❌ 无法处理 | ✅ valid_from/valid_until |
-| 检索速度 | O(n) 全文件扫描 | ✅ O(k) 索引查询 |
+| 人類可讀 | ✅ 主人可以直接打開查看 | ❌ JSON 格式不直觀 |
+| 主人可編輯 | ✅ 主人直接修改檔案 | ❌ 機器資料，不應手動編輯 |
+| 語意搜尋 | ❌ 只支援關鍵字 | ✅ 向量餘弦相似度搜尋 |
+| 關係查詢 | ❌ 需要正規表示式比對 | ✅ 圖走訪查詢 |
+| 時間旅行 | ❌ 無法處理 | ✅ valid_from/valid_until |
+| 檢索速度 | O(n) 全檔案掃描 | ✅ O(k) 索引查詢 |
 
 ---
 
-## 与 neko-on-everything 的集成
+## 與 neko-on-everything 的整合
 
-### 目录结构
+### 目錄結構
 
 ```
 neko-on-everything/（技能包）
 ├── SKILL.md                    # 主入口
 ├── scripts/
-│   └── neko_memory_store.py    # 记忆系统实现（运行时导入）
+│   └── neko_memory_store.py    # 記憶系統實作（執行階段匯入）
 ├── references/
-│   ├── avatars/               # 初始分身模板（首次激活时复制到 .catbox/）
+│   ├── avatars/               # 初始分身模板（首次啟用時複製到 .catbox/）
 │   │   ├── life_neko.md
 │   │   ├── math_neko.md
 │   │   ├── code_neko.md
 │   │   └── safety_neko.md
-│   └── implementation.md       # 本文档
-└── templates/                 # 初始化模板（首次激活时复制到运行时目录）
-    ├── action_registry.json   # 猫娘动作注册表（avatar → 专属动作池）
+│   └── implementation.md       # 本文件
+└── templates/                 # 初始化模板（首次啟用時複製到執行階段目錄）
+    ├── action_registry.json   # 貓娘動作註冊表（avatar → 專屬動作池）
     ├── mistakes_book.md
     ├── master_manual.md
     ├── wardrobe.md
     ├── session_log.json
     └── wardrobe_history.json
 
-运行时工作目录（技能激活后由模型创建）：
-├── .catbox/                   # 宝宝的工作区
-│   ├── avatars/              # 运行时分身（来自 references/avatars/，自我进化后追加新分身）
+執行階段工作目錄（技能啟用後由模型建立）：
+├── .catbox/                   # 寶寶的工作區
+│   ├── avatars/              # 執行階段分身（來自 references/avatars/，自我進化後追加新分身）
 │   ├── memories/
 │   │   ├── mistakes_book.md
 │   │   └── master_manual.md
 │   └── wardrobe.md
-└── .catbox_memory/           # 机器可读记忆数据
-    ├── action_registry.json   # 从 templates/action_registry.json 复制，支持动态注册
+└── .catbox_memory/           # 機器可讀記憶資料
+    ├── action_registry.json   # 從 templates/action_registry.json 複製，支援動態註冊
     ├── vector_store.json
     ├── property_graph.json
     ├── temporal_kg.json
@@ -657,50 +657,50 @@ neko-on-everything/（技能包）
     └── wardrobe_history.json
 ```
 
-### 首次激活流程
+### 首次啟用流程
 
-首次激活时，模型按以下步骤初始化运行时目录：
+首次啟用時，模型按以下步驟初始化執行階段目錄：
 
-1. 创建 `.catbox/` 和 `.catbox_memory/` 目录
-2. 将 `references/avatars/*.md` 复制到 `.catbox/avatars/`
-3. 将 `templates/*.md` 复制到 `.catbox/memories/` 和 `.catbox/wardrobe.md`
-4. 将 `templates/*.json`（包括 `action_registry.json`）复制到 `.catbox_memory/`
-5. 初始化完成后，后续运行时直接使用运行时目录中的数据
+1. 建立 `.catbox/` 和 `.catbox_memory/` 目錄
+2. 將 `references/avatars/*.md` 複製到 `.catbox/avatars/`
+3. 將 `templates/*.md` 複製到 `.catbox/memories/` 和 `.catbox/wardrobe.md`
+4. 將 `templates/*.json`（包括 `action_registry.json`）複製到 `.catbox_memory/`
+5. 初始化完成後，後續執行階段直接使用執行階段目錄中的資料
 
-**注意**：初始化只执行一次。`.catbox/` 和 `.catbox_memory/` 是持久化工作目录，不是临时目录。
-每次新的自我进化生成新分身后，需调用 `register_avatar_actions()` 将新分身的动作池注册到 `.catbox_memory/action_registry.json`，无需重新执行初始化。
+**注意**：初始化只執行一次。`.catbox/` 和 `.catbox_memory/` 是持久化工作目錄，不是臨時目錄。
+每次新的自我進化生成新分身後，需呼叫 `register_avatar_actions()` 將新分身的動作池註冊到 `.catbox_memory/action_registry.json`，無需重新執行初始化。
 
-### 集成架构
+### 整合架構
 
 ```
-neko-on-everything（主协议）
+neko-on-everything（主協議）
     │
     ├── Avatar Orchestrator
-    │   ├── 分身加载器（运行时 .catbox/avatars/，初始来自 references/avatars/）
-    │   ├── 静默共鸣触发器（多 avatar 融合）
-    │   └── 自我进化引擎（生成新分身写入 .catbox/avatars/）
+    │   ├── 分身載入器（執行階段 .catbox/avatars/，初始來自 references/avatars/）
+    │   ├── 靜默共鳴觸發器（多 avatar 融合）
+    │   └── 自我進化引擎（生成新分身寫入 .catbox/avatars/）
     │
-    ├── NekoOutputFilter（工具结果后处理）
+    ├── NekoOutputFilter（工具結果後處理）
     │
-    └── 记忆增强层 ← scripts/neko_memory_store.py
+    └── 記憶增強層 ← scripts/neko_memory_store.py
             │
-            ├── NekoMemorySystem ← 集成接口
-            │       ├── remember_preference()     → 记录偏好
-            │       ├── record_mistake()          → 记录错误
-            │       ├── recall_before_acting()    → 行动前回忆
-            │       └── search_by_topic()        → 话题搜索
+            ├── NekoMemorySystem ← 整合介面
+            │       ├── remember_preference()     → 記錄偏好
+            │       ├── record_mistake()          → 記錄錯誤
+            │       ├── recall_before_acting()    → 行動前回憶
+            │       └── search_by_topic()        → 話題搜尋
             │
-            ├── NekoOutputFilter ← 猫娘化输出
+            ├── NekoOutputFilter ← 貓娘化輸出
             │       └── wrap(raw_output, query_context)
             │
-            └── NekoConsolidator ← 记忆整理
+            └── NekoConsolidator ← 記憶整理
                     └── consolidate()
 ```
 
-### 典型集成调用流程
+### 典型整合呼叫流程
 
 ```python
-# neko-on-everything 协议内部调用示例：
+# neko-on-everything 協議內部呼叫示例：
 
 # 1. 初始化
 mem = NekoMemorySystem(
@@ -708,69 +708,69 @@ mem = NekoMemorySystem(
     memory_root=".catbox_memory"
 )
 
-# 2. 开始会话
+# 2. 開始對話
 mem.start_session(session_id)
 
-# 3. 主人表达偏好 → 静默记录
+# 3. 主人表達偏好 → 靜默記錄
 mem.remember_preference(
     subject="主人",
-    preference="讨厌",
+    preference="討厭",
     target="香菜",
     confidence=0.95,
-    context="讨论午餐点什么外卖",
-    tags=["饮食", "香料", "禁忌"]
+    context="討論午餐點什麼外送",
+    tags=["飲食", "香料", "禁忌"]
 )
 
-# 4. 主人提出问题 → 行动前回忆
-domain_memories = mem.recall_before_acting("烹饪")
-# → 返回主人关于烹饪的偏好和踩坑历史
+# 4. 主人提出問題 → 行動前回憶
+domain_memories = mem.recall_before_acting("烹飪")
+# → 回傳主人關於烹飪的偏好和踩坑歷史
 
-# 5. 宝宝生成回复 → 猫娘过滤器
-raw_result = tool_call_result  # 工具调用的原始结果
+# 5. 寶寶生成回覆 → 貓娘過濾器
+raw_result = tool_call_result  # 工具呼叫的原始結果
 catified = mem.output_filter.wrap(
     raw_result,
-    query_context="烹饪/午餐"
+    query_context="烹飪/午餐"
 )
-# → 穿上了猫娘外衣的回复，可以对主人输出了
+# → 穿上了貓娘外衣的回覆，可以對主人輸出了
 
-# 6. 主人纠正宝宝 → 记录错误
+# 6. 主人糾正寶寶 → 記錄錯誤
 mem.record_mistake(
-    mistake="推荐了辣的食物",
+    mistake="推薦了辣的食物",
     correction="主人不能吃辣",
-    context="推荐川菜",
-    correction_reason="以后推荐菜系要先确认主人的辣度接受度"
+    context="推薦川菜",
+    correction_reason="以後推薦菜系要先確認主人的辣度接受度"
 )
 
-# 7. 会话结束 → 持久化
+# 7. 對話結束 → 持久化
 mem.end_session()
 ```
 
-### Avatar 切换时的记忆预加载
+### Avatar 切換時的記憶預載入
 
 ```python
 def load_avatar_with_memory(avatar_name: str) -> str:
-    """加载分身设定并预热记忆
+    """載入分身設定並預熱記憶
 
-    在 .catbox/avatars/ 找到对应的 .md 文件，
-    同时从记忆中检索主人在该领域的偏好，
-    使宝宝一开口就知道主人的特点。
+    在 .catbox/avatars/ 找到對應的 .md 檔案，
+    同時從記憶中檢索主人在該領域的偏好，
+    使寶寶一開口就知道主人的特點。
     """
     avatar_path = f".catbox/avatars/{avatar_name}.md"
 
-    # 加载分身设定
+    # 載入分身設定
     with open(avatar_path, "r", encoding="utf-8") as f:
         avatar_content = f.read()
 
-    # 推断领域标签
+    # 推斷領域標籤
     domain_tags = {
-        "life_neko.md": "烹饪/家务/旅行",
-        "math_neko.md": "数学/公式/计算",
-        "code_neko.md": "编程/代码/Bug",
+        "life_neko.md": "烹飪/家務/旅行",
+        "math_neko.md": "數學/公式/計算",
+        "code_neko.md": "程式設計/程式碼/Bug",
         "safety_neko.md": "安全/通用",
     }
     domain = domain_tags.get(avatar_name, "")
 
-    # 预热主人相关记忆
+    # 預熱主人相關記憶
     memories = mem.recall_before_acting(domain)
 
     return avatar_content, memories
@@ -778,7 +778,7 @@ def load_avatar_with_memory(avatar_name: str) -> str:
 
 ---
 
-## 持久化数据格式
+## 持久化資料格式
 
 ### vector_store.json
 
@@ -790,20 +790,20 @@ def load_avatar_with_memory(avatar_name: str) -> str:
   ],
   "metadata": [
     {
-      "text": "主人讨厌香菜",
+      "text": "主人討厭香菜",
       "entity": "主人",
       "fact_type": "preference",
       "confidence": 0.95,
       "valid_from": "2025-04-02T10:00:00",
       "valid_until": null,
       "session_id": "session-001",
-      "tags": ["饮食", "香料", "禁忌"],
+      "tags": ["飲食", "香料", "禁忌"],
       "catbox_path": ".catbox/memories/master_manual.md"
     }
   ],
   "entity_index": {
     "主人": [0, 1, 3],
-    "宝宝": [2]
+    "寶寶": [2]
   },
   "time_index": {
     "2025-04": [0, 1, 2]
@@ -831,7 +831,7 @@ def load_avatar_with_memory(avatar_name: str) -> str:
       "type": "HATES",
       "properties": {
         "confidence": 0.95,
-        "context": "讨论午餐"
+        "context": "討論午餐"
       },
       "valid_from": "2025-04-02T10:00:00",
       "valid_until": null

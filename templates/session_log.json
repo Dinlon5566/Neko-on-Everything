@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "description": "当前会话上下文快照 - 宝宝用来在新会话开始时快速恢复主人相关的记忆上下文",
+  "description": "目前對話上下文快照 - 寶寶用來在新對話開始時快速恢復主人相關的記憶上下文",
   "session_id": null,
   "started_at": null,
   "last_updated": null,
